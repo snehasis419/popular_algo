@@ -1,0 +1,929 @@
+<html><head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title></title>
+</head><body bgcolor="#ffffff"><table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr>
+<td align="left"><a href="http://beej.us/net2/html/structs.html">Prev</a></td><td align="center"><a href="http://beej.us/net2/html/index.html">Contents</a></td><td align="right"><a href="http://beej.us/net2/html/clientserver.html">Next</a></td>
+</tr>
+</tbody></table>
+<hr>
+<p>
+</p><h2>4 <a name="syscalls">System Calls or Bust</a>
+</h2>
+<p></p>
+<p>This is the section where we get into the system calls that allow
+you to access the network functionality of a Unix box.  When you call
+one of these functions, the kernel takes over and does all the work for
+you automagically.</p>
+<p>The place most people get stuck around here is what order to call
+these things in.  In that, the <b><tt>man</tt></b> pages are no use,
+as you've probably discovered.  Well, to help with that dreadful
+situation, I've tried to lay out the system calls in the following
+sections in <i>exactly</i> (approximately) the same order
+that you'll need to call them in your programs.</p>
+<p>That, coupled with a few pieces of sample code here and there,
+some milk and cookies (which I fear you will have to supply yourself),
+and some raw guts and courage, and you'll be beaming data around the
+Internet like the Son of Jon Postel!</p>
+<p>
+<br>
+</p><h3>4.1 <a name="socket"><tt>socket()</tt>--Get the File Descriptor!</a>
+</h3>
+<p></p>
+<p>I guess I can put it off no longer--I have to talk about the
+<tt>socket()</tt> system call.  Here's the breakdown:</p>
+<p>
+<table border="0" cellpadding="10" cellspacing="0" width="100%">
+<tbody><tr>
+<td bgcolor="#cfcfcf">
+<pre>#include &lt;sys/types.h&gt;
+#include &lt;sys/socket.h&gt;
+
+int socket(int domain, int type, int protocol); 
+</pre>
+</td>
+</tr>
+</tbody></table>
+</p>
+<p>But what are these arguments?  First,
+<i><tt>domain</tt></i> should be set to
+"<b><tt>AF_INET</tt></b>", just like in the <tt>struct
+sockaddr_in</tt> (above.)  Next, the <i><tt>type</tt></i>
+argument tells the kernel what kind of socket this is:
+<b><tt>SOCK_STREAM</tt></b> or <b><tt>SOCK_DGRAM</tt></b>.
+Finally, just set <i><tt>protocol</tt></i> to
+"<b><tt>0</tt></b>" to have <tt>socket()</tt> choose
+the correct protocol based on the <i><tt>type</tt></i>.  (Notes:
+there are many more <i><tt>domain</tt></i>s than I've listed.
+There are many more <i><tt>type</tt></i>s than I've listed.  See
+the <tt>socket()</tt> man page.  Also, there's a "better"
+way to get the <i><tt>protocol</tt></i>.  See the
+<tt>getprotobyname()</tt> man page.)</p>
+<p>
+<tt>socket()</tt> simply returns to you a socket
+descriptor that you can use in later system calls, or
+<b><tt>-1</tt></b> on error.  The global variable
+<i><tt>errno</tt></i> is set to the error's value (see the
+<tt>perror()</tt> man page.)</p>
+<p>In some documentation, you'll see mention of a mystical
+"<b><tt>PF_INET</tt></b>".  This is a weird etherial beast that is
+rarely seen in nature, but I might as well clarify it a bit here.  Once
+a long time ago, it was thought that maybe a address family (what the
+"AF" in "<b><tt>AF_INET</tt></b>" stands for) might support several
+protocols that were referenced by their protocol family (what the "PF" in
+"<b><tt>PF_INET</tt></b>" stands for).  That didn't happen.  Oh
+well.  So the correct thing to do is to use <b><tt>AF_INET</tt></b>
+in your <tt>struct sockaddr_in</tt> and <b><tt>PF_INET</tt></b>
+in your call to <tt>socket()</tt>.  But practically
+speaking, you can use <b><tt>AF_INET</tt></b> everywhere.  And,
+since that's what W. Richard Stevens does in his book, that's what I'll
+do here.</p>
+<p>Fine, fine, fine, but what good is this socket?  The answer is
+that it's really no good by itself, and you need to read on and make
+more system calls for it to make any sense.</p>
+<p>
+<br>
+</p><h3>4.2 <a name="bind"><tt>bind()</tt>--What port am I on?</a>
+</h3>
+<p></p>
+<p>Once you have a socket, you might have to associate that socket
+with a port on your local machine.  (This is commonly done if you're
+going to <tt>listen()</tt> for incoming connections on a
+specific port--MUDs do this when they tell you to "telnet to x.y.z port
+6969".)  The port number is used by the kernel to match an incoming
+packet to a certain process's socket descriptor.  If you're going to
+only be doing a <tt>connect()</tt>, this may be unnecessary.
+Read it anyway, just for kicks.</p>
+<p>Here is the synopsis for the <tt>bind()</tt> system
+call:</p>
+<p>
+<table border="0" cellpadding="10" cellspacing="0" width="100%">
+<tbody><tr>
+<td bgcolor="#cfcfcf">
+<pre>#include &lt;sys/types.h&gt;
+#include &lt;sys/socket.h&gt;
+
+int bind(int sockfd, struct sockaddr *my_addr, int addrlen); 
+</pre>
+</td>
+</tr>
+</tbody></table>
+</p>
+<p>
+<i><tt>sockfd</tt></i> is the socket file descriptor
+returned by <tt>socket()</tt>.
+<i><tt>my_addr</tt></i> is a pointer to a <tt>struct
+sockaddr</tt> that contains information about your address, namely,
+port and IP address.  <i><tt>addrlen</tt></i> can be set to
+<tt>sizeof(struct sockaddr)</tt>.</p>
+<p>Whew.  That's a bit to absorb in one chunk.  Let's have an
+example:</p>
+<p>
+<table border="0" cellpadding="10" cellspacing="0" width="100%">
+<tbody><tr>
+<td bgcolor="#cfcfcf">
+<pre>#include &lt;string.h&gt;
+#include &lt;sys/types.h&gt;
+#include &lt;sys/socket.h&gt;
+#include &lt;netinet/in.h&gt;
+
+#define MYPORT 3490
+
+main()
+{
+    int sockfd;
+    struct sockaddr_in my_addr;
+
+    sockfd = socket(AF_INET, SOCK_STREAM, 0); // do some error checking!
+
+    my_addr.sin_family = AF_INET;         // host byte order
+    my_addr.sin_port = htons(MYPORT);     // short, network byte order
+    my_addr.sin_addr.s_addr = inet_addr("10.12.110.57");
+    memset(&amp;(my_addr.sin_zero), '\0', 8); // zero the rest of the struct
+
+    // don't forget your error checking for bind():
+    bind(sockfd, (struct sockaddr *)&amp;my_addr, sizeof(struct sockaddr));
+    .
+    .
+    . 
+</pre>
+</td>
+</tr>
+</tbody></table>
+</p>
+<p>There are a few things to notice here:
+<i><tt>my_addr.sin_port</tt></i> is in Network Byte Order.  So is
+<i><tt>my_addr.sin_addr.s_addr</tt></i>.  Another thing to watch
+out for is that the header files might differ from system to system.  To
+be sure, you should check your local <b><tt>man</tt></b>
+pages.</p>
+<p>Lastly, on the topic of <tt>bind()</tt>, I
+should mention that some of the process of getting your own IP address
+and/or port can can be automated:</p>
+<p>
+<table border="0" cellpadding="10" cellspacing="0" width="100%">
+<tbody><tr>
+<td bgcolor="#cfcfcf">
+<pre>    my_addr.sin_port = 0; // choose an unused port at random
+    my_addr.sin_addr.s_addr = INADDR_ANY;  // use my IP address 
+</pre>
+</td>
+</tr>
+</tbody></table>
+</p>
+<p>See, by setting <i><tt>my_addr.sin_port</tt></i> to zero,
+you are telling <tt>bind()</tt> to choose the port for you.
+Likewise, by setting <i><tt>my_addr.sin_addr.s_addr</tt></i> to
+<b><tt>INADDR_ANY</tt></b>, you are telling it to automatically
+fill in the IP address of the machine the process is running on.</p>
+<p>If you are into noticing little things, you might have seen that I
+didn't put <b><tt>INADDR_ANY</tt></b> into Network Byte Order!
+Naughty me.  However, I have inside info:
+<b><tt>INADDR_ANY</tt></b> is really zero!  Zero still has zero on
+bits even if you rearrange the bytes.  However, purists will point out
+that there could be a parallel dimension where
+<b><tt>INADDR_ANY</tt></b> is, say, 12 and that my code won't work
+there.  That's ok with me:</p>
+<p>
+<table border="0" cellpadding="10" cellspacing="0" width="100%">
+<tbody><tr>
+<td bgcolor="#cfcfcf">
+<pre>    my_addr.sin_port = htons(0); // choose an unused port at random
+    my_addr.sin_addr.s_addr = htonl(INADDR_ANY);  // use my IP address 
+</pre>
+</td>
+</tr>
+</tbody></table>
+</p>
+<p>Now we're so portable you probably wouldn't believe it.  I just
+wanted to point that out, since most of the code you come across won't
+bother running <b><tt>INADDR_ANY</tt></b> through
+<tt>htonl()</tt>.</p>
+<p>
+<tt>bind()</tt> also returns <b><tt>-1</tt></b>
+on error and sets <i><tt>errno</tt></i> to the error's
+value.</p>
+<p>Another thing to watch out for when calling
+<tt>bind()</tt>: don't go underboard with your port numbers.
+All ports below 1024 are RESERVED (unless you're the superuser)!  You
+can have any port number above that, right up to 65535 (provided they
+aren't already being used by another program.)</p>
+<p>Sometimes, you might notice, you try to rerun a server and
+<tt>bind()</tt> fails, claiming "Address already in use."
+What does that mean?  Well, a bit a of socket that was connected is
+still hanging around in the kernel, and it's hogging the port.  You can
+either wait for it to clear (a minute or so), or add code to your
+program allowing it to reuse the port, like this:</p>
+<p>
+<table border="0" cellpadding="10" cellspacing="0" width="100%">
+<tbody><tr>
+<td bgcolor="#cfcfcf">
+<pre>int yes=1;
+	//char yes='1'; // Solaris people use this
+
+// lose the pesky "Address already in use" error message
+if (setsockopt(listener,SOL_SOCKET,SO_REUSEADDR,&amp;yes,sizeof(int)) == -1) {
+    perror("setsockopt");
+    exit(1);
+} 
+</pre>
+</td>
+</tr>
+</tbody></table>
+</p>
+<p>One small extra final note about <tt>bind()</tt>:
+there are times when you won't absolutely have to call it.  If you are
+<tt>connect()</tt>ing to a remote machine and you don't
+care what your local port is (as is the case with
+<b><tt>telnet</tt></b> where you only care about the remote port),
+you can simply call <tt>connect()</tt>, it'll check to see
+if the socket is unbound, and will <tt>bind()</tt> it to an
+unused local port if necessary.</p>
+<p>
+<br>
+</p><h3>4.3 <a name="connect"><tt>connect()</tt>--Hey, you!</a>
+</h3>
+<p></p>
+<p>Let's just pretend for a few minutes that you're a telnet
+application.  Your user commands you (just like in the movie
+<i>TRON</i>) to get a socket file descriptor.  You comply
+and call <tt>socket()</tt>.  Next, the user
+tells you to connect to "<tt>10.12.110.57</tt>"
+on port "<tt>23</tt>" (the standard telnet
+port.)  Yow!  What do you do now?</p>
+<p>Lucky for you, program, you're now perusing the section on
+<tt>connect()</tt>--how to connect to a remote host.  So
+read furiously onward!  No time to lose!</p>
+<p>The <tt>connect()</tt> call is as follows:</p>
+<p>
+<table border="0" cellpadding="10" cellspacing="0" width="100%">
+<tbody><tr>
+<td bgcolor="#cfcfcf">
+<pre>#include &lt;sys/types.h&gt;
+#include &lt;sys/socket.h&gt;
+
+int connect(int sockfd, struct sockaddr *serv_addr, int addrlen); 
+</pre>
+</td>
+</tr>
+</tbody></table>
+</p>
+<p>
+<i><tt>sockfd</tt></i> is our friendly neighborhood socket
+file descriptor, as returned by the <tt>socket()</tt> call,
+<i><tt>serv_addr</tt></i> is a <tt>struct sockaddr</tt>
+containing the destination port and IP address, and
+<i><tt>addrlen</tt></i> can be set to
+<tt>sizeof(struct sockaddr)</tt>.</p>
+<p>Isn't this starting to make more sense?  Let's have an
+example:</p>
+<p>
+<table border="0" cellpadding="10" cellspacing="0" width="100%">
+<tbody><tr>
+<td bgcolor="#cfcfcf">
+<pre>#include &lt;string.h&gt;
+#include &lt;sys/types.h&gt;
+#include &lt;sys/socket.h&gt;
+#include &lt;netinet/in.h&gt;
+
+#define DEST_IP   "10.12.110.57"
+#define DEST_PORT 23
+
+main()
+{
+    int sockfd;
+    struct sockaddr_in dest_addr;   // will hold the destination addr
+
+    sockfd = socket(AF_INET, SOCK_STREAM, 0); // do some error checking!
+
+    dest_addr.sin_family = AF_INET;          // host byte order
+    dest_addr.sin_port = htons(DEST_PORT);   // short, network byte order
+    dest_addr.sin_addr.s_addr = inet_addr(DEST_IP);
+    memset(&amp;(dest_addr.sin_zero), '\0', 8);  // zero the rest of the struct
+
+    // don't forget to error check the connect()!
+    connect(sockfd, (struct sockaddr *)&amp;dest_addr, sizeof(struct sockaddr));
+    .
+    .
+    . 
+</pre>
+</td>
+</tr>
+</tbody></table>
+</p>
+<p>Again, be sure to check the return value from
+<tt>connect()</tt>--it'll return <b><tt>-1</tt></b> on
+error and set the variable <i><tt>errno</tt></i>.</p>
+<p>Also, notice that we didn't call <tt>bind()</tt>.
+Basically, we don't care about our local port number; we only care where
+we're going (the remote port).  The kernel will choose a local port for
+us, and the site we connect to will automatically get this information
+from us.  No worries.</p>
+<p>
+<br>
+</p><h3>4.4 <a name="listen"><tt>listen()</tt>--Will somebody please call
+me?</a>
+</h3>
+<p></p>
+<p>Ok, time for a change of pace.  What if you don't want to connect
+to a remote host.  Say, just for kicks, that you want to wait for
+incoming connections and handle them in some way.  The process is two
+step: first you <tt>listen()</tt>, then you
+<tt>accept()</tt> (see below.)</p>
+<p>The listen call is fairly simple, but requires a bit of
+explanation:</p>
+<p>
+<table border="0" cellpadding="10" cellspacing="0" width="100%">
+<tbody><tr>
+<td bgcolor="#cfcfcf">
+<pre>int listen(int sockfd, int backlog); 
+</pre>
+</td>
+</tr>
+</tbody></table>
+</p>
+<p>
+<i><tt>sockfd</tt></i> is the usual socket file descriptor
+from the <tt>socket()</tt> system call.
+<i><tt>backlog</tt></i> is the number of connections allowed on
+the incoming queue.  What does that mean?  Well, incoming connections
+are going to wait in this queue until you <tt>accept()</tt>
+them (see below) and this is the limit on how many can queue up.  Most
+systems silently limit this number to about 20; you can probably get
+away with setting it to <b><tt>5</tt></b> or
+<b><tt>10</tt></b>.</p>
+<p>Again, as per usual, <tt>listen()</tt> returns
+<b><tt>-1</tt></b> and sets <i><tt>errno</tt></i> on
+error.</p>
+<p>Well, as you can probably imagine, we need to call
+<tt>bind()</tt> before we call <tt>listen()</tt>
+or the kernel will have us listening on a random port.  Bleah!  So if
+you're going to be listening for incoming connections, the sequence of
+system calls you'll make is:</p>
+<p>
+<table border="0" cellpadding="10" cellspacing="0" width="100%">
+<tbody><tr>
+<td bgcolor="#cfcfcf">
+<pre>socket();
+bind();
+listen();
+/* accept() goes here */ 
+</pre>
+</td>
+</tr>
+</tbody></table>
+</p>
+<p>I'll just leave that in the place of sample code, since it's
+fairly self-explanatory.  (The code in the <tt>accept()</tt>
+section, below, is more complete.)  The really tricky part of this whole
+sha-bang is the call to <tt>accept()</tt>.</p>
+<p>
+<br>
+</p><h3>4.5 <a name="accept"><tt>accept()</tt>--"Thank you for calling port
+3490."</a>
+</h3>
+<p></p>
+<p>Get ready--the <tt>accept()</tt> call is kinda weird!
+What's going to happen is this: someone far far away will try to
+<tt>connect()</tt> to your machine on a port that you are
+<tt>listen()</tt>ing on.  Their connection will be queued
+up waiting to be <tt>accept()</tt>ed.  You call
+<tt>accept()</tt> and you tell it to get the pending
+connection.  It'll return to you a <i>brand new socket file
+descriptor</i> to use for this single connection!  That's right,
+suddenly you have <i>two socket file descriptors</i> for
+the price of one!  The original one is still listening on your port and
+the newly created one is finally ready to <tt>send()</tt>
+and <tt>recv()</tt>.  We're there! </p>
+<p>The call is as follows:</p>
+<p>
+<table border="0" cellpadding="10" cellspacing="0" width="100%">
+<tbody><tr>
+<td bgcolor="#cfcfcf">
+<pre> #include &lt;sys/socket.h&gt;
+
+ int accept(int sockfd, void *addr, int *addrlen); 
+</pre>
+</td>
+</tr>
+</tbody></table>
+</p>
+<p>
+<i><tt>sockfd</tt></i> is the
+<tt>listen()</tt>ing socket descriptor.  Easy enough.
+<i><tt>addr</tt></i> will usually be a pointer to a local
+<tt>struct sockaddr_in</tt>.  This is where the information about
+the incoming connection will go (and with it you can determine which
+host is calling you from which port).  <i><tt>addrlen</tt></i> is
+a local integer variable that should be set to
+<tt>sizeof(struct sockaddr_in)</tt> before its
+address is passed to <tt>accept()</tt>.  Accept will not put
+more than that many bytes into <i><tt>addr</tt></i>. If it puts
+fewer in, it'll change the value of <i><tt>addrlen</tt></i> to
+reflect that.</p>
+<p>Guess what?  <tt>accept()</tt> returns
+<b><tt>-1</tt></b> and sets <i><tt>errno</tt></i> if an
+error occurs.  Betcha didn't figure that.</p>
+<p>Like before, this is a bunch to absorb in one chunk, so here's a
+sample code fragment for your perusal:</p>
+<p>
+<table border="0" cellpadding="10" cellspacing="0" width="100%">
+<tbody><tr>
+<td bgcolor="#cfcfcf">
+<pre>#include &lt;string.h&gt;
+#include &lt;sys/types.h&gt;
+#include &lt;sys/socket.h&gt;
+#include &lt;netinet/in.h&gt;
+
+#define MYPORT 3490    // the port users will be connecting to
+
+#define BACKLOG 10     // how many pending connections queue will hold
+
+main()
+{
+    int sockfd, new_fd;  // listen on sock_fd, new connection on new_fd
+    struct sockaddr_in my_addr;    // my address information
+    struct sockaddr_in their_addr; // connector's address information
+    int sin_size;
+
+    sockfd = socket(AF_INET, SOCK_STREAM, 0); // do some error checking!
+
+    my_addr.sin_family = AF_INET;         // host byte order
+    my_addr.sin_port = htons(MYPORT);     // short, network byte order
+    my_addr.sin_addr.s_addr = INADDR_ANY; // auto-fill with my IP
+    memset(&amp;(my_addr.sin_zero), '\0', 8); // zero the rest of the struct
+
+    // don't forget your error checking for these calls:
+    bind(sockfd, (struct sockaddr *)&amp;my_addr, sizeof(struct sockaddr));
+
+    listen(sockfd, BACKLOG);
+
+    sin_size = sizeof(struct sockaddr_in);
+    new_fd = accept(sockfd, (struct sockaddr *)&amp;their_addr, &amp;sin_size);
+    .
+    .
+    . 
+</pre>
+</td>
+</tr>
+</tbody></table>
+</p>
+<p>Again, note that we will use the socket descriptor
+<i><tt>new_fd</tt></i> for all <tt>send()</tt> and
+<tt>recv()</tt> calls.  If you're only getting one single
+connection ever, you can <tt>close()</tt> the listening
+<i><tt>sockfd</tt></i> in order to prevent more incoming
+connections on the same port, if you so desire.</p>
+<p>
+<br>
+</p><h3>4.6 <a name="sendrecv"><tt>send()</tt> and <tt>recv()</tt>--Talk
+to me, baby!</a>
+</h3>
+<p></p>
+<p>These two functions are for communicating over stream sockets or
+connected datagram sockets.  If you want to use regular unconnected
+datagram sockets, you'll need to see the section on <a href="http://beej.us/net2/html/syscalls.html#sendtorecv"><tt>sendto()</tt> and
+<tt>recvfrom()</tt></a>, below.</p>
+<p>The <tt>send()</tt> call:</p>
+<p>
+<table border="0" cellpadding="10" cellspacing="0" width="100%">
+<tbody><tr>
+<td bgcolor="#cfcfcf">
+<pre>int send(int sockfd, const void *msg, int len, int flags); 
+</pre>
+</td>
+</tr>
+</tbody></table>
+</p>
+<p>
+<i><tt>sockfd</tt></i> is the socket descriptor you want to
+send data to (whether it's the one returned by
+<tt>socket()</tt> or the one you got with
+<tt>accept()</tt>.) <i><tt>msg</tt></i> is a pointer
+to the data you want to send, and <i><tt>len</tt></i> is the
+length of that data in bytes.  Just set <i><tt>flags</tt></i> to
+<b><tt>0</tt></b>.  (See the <tt>send()</tt> man page
+for more information concerning flags.)</p>
+<p>Some sample code might be:</p>
+<p>
+<table border="0" cellpadding="10" cellspacing="0" width="100%">
+<tbody><tr>
+<td bgcolor="#cfcfcf">
+<pre>char *msg = "Beej was here!";
+int len, bytes_sent;
+.
+.
+len = strlen(msg);
+bytes_sent = send(sockfd, msg, len, 0);
+.
+.
+. 
+</pre>
+</td>
+</tr>
+</tbody></table>
+</p>
+<p>
+<tt>send()</tt> returns the number of bytes actually
+sent out--<i>this might be less than the number you told it to
+send!</i>  See, sometimes you tell it to send a whole gob of data
+and it just can't handle it.  It'll fire off as much of the data as it
+can, and trust you to send the rest later.  Remember, if the value
+returned by <tt>send()</tt> doesn't match the value in
+<i><tt>len</tt></i>, it's up to you to send the rest of the
+string.  The good news is this: if the packet is small (less than 1K or
+so) it will <i>probably</i> manage to send the whole thing
+all in one go.  Again, <b><tt>-1</tt></b> is returned on error, and
+<i><tt>errno</tt></i> is set to the error number.</p>
+<p>The <tt>recv()</tt> call is similar in many
+respects:</p>
+<p>
+<table border="0" cellpadding="10" cellspacing="0" width="100%">
+<tbody><tr>
+<td bgcolor="#cfcfcf">
+<pre>int recv(int sockfd, void *buf, int len, unsigned int flags); 
+</pre>
+</td>
+</tr>
+</tbody></table>
+</p>
+<p>
+<i><tt>sockfd</tt></i> is the socket descriptor to read
+from, <i><tt>buf</tt></i> is the buffer to read the information
+into, <i><tt>len</tt></i> is the maximum length of the buffer,
+and <i><tt>flags</tt></i> can again be set to
+<b><tt>0</tt></b>.  (See the <tt>recv()</tt> man page
+for flag information.)</p>
+<p>
+<tt>recv()</tt> returns the number of bytes actually
+read into the buffer, or <b><tt>-1</tt></b> on error (with
+<i><tt>errno</tt></i> set, accordingly.)</p>
+<p>Wait!  <tt>recv()</tt> can return
+<b><tt>0</tt></b>.  This can mean only one thing: the remote side
+has closed the connection on you!  A return value of
+<b><tt>0</tt></b> is <tt>recv()</tt>'s way of letting
+you know this has occurred.</p>
+<p>There, that was easy, wasn't it?  You can now pass data back and
+forth on stream sockets!  Whee!  You're a Unix Network
+Programmer!</p>
+<p>
+<br>
+</p><h3>4.7 <a name="sendtorecv"><tt>sendto()</tt> and
+<tt>recvfrom()</tt>--Talk to me, DGRAM-style</a>
+</h3>
+<p></p>
+<p>"This is all fine and dandy," I hear you saying, "but where does
+this leave me with unconnected datagram sockets?"  No problemo, amigo.
+We have just the thing.</p>
+<p>Since datagram sockets aren't connected to a remote host, guess which
+piece of information we need to give before we send a packet?  That's
+right!  The destination address!  Here's the scoop:</p>
+<p>
+<table border="0" cellpadding="10" cellspacing="0" width="100%">
+<tbody><tr>
+<td bgcolor="#cfcfcf">
+<pre>int sendto(int sockfd, const void *msg, int len, unsigned int flags,
+           const struct sockaddr *to, int tolen); 
+</pre>
+</td>
+</tr>
+</tbody></table>
+</p>
+<p>As you can see, this call is basically the same as the call to
+<tt>send()</tt> with the addition of two other pieces of
+information.  <i><tt>to</tt></i> is a pointer to a <tt>struct
+sockaddr</tt> (which you'll probably have as a <tt>struct
+sockaddr_in</tt> and cast it at the last minute) which contains the
+destination IP address and port.  <i><tt>tolen</tt></i> can
+simply be set to <tt>sizeof(struct
+sockaddr)</tt>.</p>
+<p>Just like with <tt>send()</tt>,
+<tt>sendto()</tt> returns the number of bytes actually sent
+(which, again, might be less than the number of bytes you told it to
+send!), or <b><tt>-1</tt></b> on error.</p>
+<p>Equally similar are <tt>recv()</tt> and
+<tt>recvfrom()</tt>.  The synopsis of
+<tt>recvfrom()</tt> is:</p>
+<p>
+<table border="0" cellpadding="10" cellspacing="0" width="100%">
+<tbody><tr>
+<td bgcolor="#cfcfcf">
+<pre>int recvfrom(int sockfd, void *buf, int len, unsigned int flags,
+             struct sockaddr *from, int *fromlen); 
+</pre>
+</td>
+</tr>
+</tbody></table>
+</p>
+<p>Again, this is just like <tt>recv()</tt> with the
+addition of a couple fields.  <i><tt>from</tt></i> is a pointer
+to a local <tt>struct sockaddr</tt> that will be filled with the IP
+address and port of the originating machine.
+<i><tt>fromlen</tt></i> is a pointer to a local <tt>int</tt>
+that should be initialized to <tt>sizeof(struct sockaddr)</tt>.
+When the function returns, <i><tt>fromlen</tt></i> will contain
+the length of the address actually stored in
+<i><tt>from</tt></i>.</p>
+<p>
+<tt>recvfrom()</tt> returns the number of bytes
+received, or <b><tt>-1</tt></b> on error (with
+<i><tt>errno</tt></i> set accordingly.)</p>
+<p>Remember, if you <tt>connect()</tt> a datagram socket,
+you can then simply use <tt>send()</tt> and
+<tt>recv()</tt> for all your transactions.  The socket
+itself is still a datagram socket and the packets still use UDP, but the
+socket interface will automatically add the destination and source
+information for you.</p>
+<p>
+<br>
+</p><h3>4.8 <a name="closedown"><tt>close()</tt> and
+<tt>shutdown()</tt>--Get outta my face!</a>
+</h3>
+<p></p>
+<p>Whew!  You've been <tt>send()</tt>ing and
+<tt>recv()</tt>ing data all day long, and you've had it.
+You're ready to close the connection on your socket descriptor.  This is
+easy.  You can just use the regular Unix file descriptor
+<tt>close()</tt> function:</p>
+<p>
+<table border="0" cellpadding="10" cellspacing="0" width="100%">
+<tbody><tr>
+<td bgcolor="#cfcfcf">
+<pre>close(sockfd); 
+</pre>
+</td>
+</tr>
+</tbody></table>
+</p>
+<p>This will prevent any more reads and writes to the socket.  Anyone
+attempting to read or write the socket on the remote end will receive an
+error.</p>
+<p>Just in case you want a little more control over how the socket
+closes, you can use the <tt>shutdown()</tt> function.  It
+allows you to cut off communication in a certain direction, or both ways
+(just like <tt>close()</tt> does.)  Synopsis:</p>
+<p>
+<table border="0" cellpadding="10" cellspacing="0" width="100%">
+<tbody><tr>
+<td bgcolor="#cfcfcf">
+<pre>int shutdown(int sockfd, int how); 
+</pre>
+</td>
+</tr>
+</tbody></table>
+</p>
+<p>
+<i><tt>sockfd</tt></i> is the socket file descriptor you
+want to shutdown, and <i><tt>how</tt></i> is one of the
+following:</p>
+<ul>
+<li>
+<b><tt>0</tt></b> -- Further receives are
+disallowed</li>
+<li>
+<b><tt>1</tt></b> -- Further sends are
+disallowed</li>
+<li>
+<b><tt>2</tt></b> -- Further sends and receives are
+disallowed (like <tt>close()</tt>)</li>
+</ul>
+<p>
+<tt>shutdown()</tt> returns <b><tt>0</tt></b> on
+success, and <b><tt>-1</tt></b> on error (with
+<i><tt>errno</tt></i> set accordingly.)</p>
+<p>If you deign to use <tt>shutdown()</tt> on unconnected
+datagram sockets, it will simply make the socket unavailable for further
+<tt>send()</tt> and <tt>recv()</tt> calls
+(remember that you can use these if you <tt>connect()</tt>
+your datagram socket.)</p>
+<p>It's important to note that <tt>shutdown()</tt>
+doesn't actually close the file descriptor--it just changes its
+usability.  To free a socket descriptor, you need to use
+<tt>close()</tt>.</p>
+<p>Nothing to it.</p>
+<p>
+<br>
+</p><h3>4.9 <a name="getpeername"><tt>getpeername()</tt>--Who are you?</a>
+</h3>
+<p></p>
+<p>This function is so easy.</p>
+<p>It's so easy, I almost didn't give it it's own section.  But here
+it is anyway.</p>
+<p>The function <tt>getpeername()</tt> will tell you who is at the other end
+of a connected stream socket.  The synopsis:</p>
+<p>
+<table border="0" cellpadding="10" cellspacing="0" width="100%">
+<tbody><tr>
+<td bgcolor="#cfcfcf">
+<pre>#include &lt;sys/socket.h&gt;
+
+int getpeername(int sockfd, struct sockaddr *addr, int *addrlen); 
+</pre>
+</td>
+</tr>
+</tbody></table>
+</p>
+<p>
+<i><tt>sockfd</tt></i> is the descriptor of the connected
+stream socket, <i><tt>addr</tt></i> is a pointer to a
+<tt>struct sockaddr</tt> (or a <tt>struct sockaddr_in</tt>) that
+will hold the information about the other side of the connection, and
+<i><tt>addrlen</tt></i> is a pointer to an <tt>int</tt>, that
+should be initialized to <tt>sizeof(struct
+sockaddr)</tt>.</p>
+<p>The function returns <b><tt>-1</tt></b> on error and sets
+<i><tt>errno</tt></i> accordingly.</p>
+<p>Once you have their address, you can use
+<tt>inet_ntoa()</tt> or <tt>gethostbyaddr()</tt>
+to print or get more information.  No, you can't get their login name.
+(Ok, ok.  If the other computer is running an ident daemon, this is
+possible.  This, however, is beyond the scope of this document.  Check
+out <a href="http://www.rfc-editor.org/rfc/rfc1413.txt">RFC-1413</a> for more
+info.)</p>
+<p>
+<br>
+</p><h3>4.10 <a name="gethostname"><tt>gethostname()</tt>--Who am I?</a>
+</h3>
+<p></p>
+<p>Even easier than <tt>getpeername()</tt> is the
+function <tt>gethostname()</tt>.  It returns the name of the
+computer that your program is running on.  The name can then be used by
+<tt>gethostbyname()</tt>, below, to determine the IP address
+of your local machine.</p>
+<p>What could be more fun?  I could think of a few things, but they
+don't pertain to socket programming.  Anyway, here's the
+breakdown:</p>
+<p>
+<table border="0" cellpadding="10" cellspacing="0" width="100%">
+<tbody><tr>
+<td bgcolor="#cfcfcf">
+<pre>#include &lt;unistd.h&gt;
+
+int gethostname(char *hostname, size_t size); 
+</pre>
+</td>
+</tr>
+</tbody></table>
+</p>
+<p>The arguments are simple: <i><tt>hostname</tt></i> is a
+pointer to an array of chars that will contain the hostname upon the
+function's return, and <i><tt>size</tt></i> is the length in
+bytes of the <i><tt>hostname</tt></i> array.</p>
+<p>The function returns <b><tt>0</tt></b> on successful
+completion, and <b><tt>-1</tt></b> on error, setting
+<i><tt>errno</tt></i> as usual.</p>
+<p>
+<br>
+</p><h3>4.11 <a name="dns">DNS--You say "whitehouse.gov", I say "198.137.240.92"</a>
+</h3>
+<p></p>
+<p>In case you don't know what DNS is, it stands for "Domain Name
+Service".  In a nutshell, you tell it what the human-readable address is
+for a site, and it'll give you the IP address (so you can use it with
+<tt>bind()</tt>, <tt>connect()</tt>,
+<tt>sendto()</tt>, or whatever you need it for.)  This way,
+when someone enters:</p>
+<p>
+<table border="0" cellpadding="10" cellspacing="0" width="100%">
+<tbody><tr>
+<td bgcolor="#cfcfcf">
+<pre>$ <b><tt>telnet whitehouse.gov</tt></b>
+</pre>
+</td>
+</tr>
+</tbody></table>
+</p>
+<p>
+<b><tt>telnet</tt></b> can find out that it needs to
+<tt>connect()</tt> to "198.137.240.92".</p>
+<p>But how does it work?  You'll be using the function
+<tt>gethostbyname()</tt>:</p>
+<p>
+<table border="0" cellpadding="10" cellspacing="0" width="100%">
+<tbody><tr>
+<td bgcolor="#cfcfcf">
+<pre>#include &lt;netdb.h&gt;
+
+struct hostent *gethostbyname(const char *name); 
+</pre>
+</td>
+</tr>
+</tbody></table>
+</p>
+<p>As you see, it returns a pointer to a <tt>struct hostent</tt>,
+the layout of which is as follows:</p>
+<p>
+<table border="0" cellpadding="10" cellspacing="0" width="100%">
+<tbody><tr>
+<td bgcolor="#cfcfcf">
+<pre>struct hostent {
+    char    *h_name;
+    char    **h_aliases;
+    int     h_addrtype;
+    int     h_length;
+    char    **h_addr_list;
+};
+#define h_addr h_addr_list[0] 
+</pre>
+</td>
+</tr>
+</tbody></table>
+</p>
+<p>And here are the descriptions of the fields in the <tt>struct
+hostent</tt>:</p>
+<ul>
+<li>
+<i><tt>h_name</tt></i> -- Official name of the
+host.</li>
+<li>
+<i><tt>h_aliases</tt></i> -- A NULL-terminated
+array of alternate names for the host.</li>
+<li>
+<i><tt>h_addrtype</tt></i> -- The type of address
+being returned; usually
+<i><tt>AF_INET</tt></i>.</li>
+<li>
+<i><tt>h_length</tt></i> -- The length of the
+address in bytes.</li>
+<li>
+<i><tt>h_addr_list</tt></i> -- A zero-terminated
+array of network addresses for the host.  Host addresses are in Network
+Byte Order.</li>
+<li>
+<i><tt>h_addr</tt></i> -- The first address in
+<i><tt>h_addr_list</tt></i>.</li>
+</ul>
+<p>
+<tt>gethostbyname()</tt> returns a pointer to the
+filled <tt>struct hostent</tt>, or NULL on error.  (But
+<i><tt>errno</tt></i> is <i>not</i>
+set--<i><i><tt>h_errno</tt></i></i> is set instead.
+See <tt>herror()</tt>, below.)</p>
+<p>But how is it used?  Sometimes (as we find from reading computer
+manuals), just spewing the information at the reader is not enough.
+This function is certainly easier to use than it looks.</p>
+<p>
+<a href="http://www.ecst.csuchico.edu/%7Ebeej/guide/net/examples/getip.c">Here's an example
+program</a>:</p>
+<p>
+<table border="0" cellpadding="10" cellspacing="0" width="100%">
+<tbody><tr>
+<td bgcolor="#cfcfcf">
+<pre>/*
+** getip.c -- a hostname lookup demo
+*/
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;errno.h&gt;
+#include &lt;netdb.h&gt;
+#include &lt;sys/types.h&gt;
+#include &lt;sys/socket.h&gt;
+#include &lt;netinet/in.h&gt;
+#include &lt;arpa/inet.h&gt;
+
+int main(int argc, char *argv[])
+{
+    struct hostent *h;
+
+    if (argc != 2) {  // error check the command line
+        fprintf(stderr,"usage: getip address\n");
+        exit(1);
+    }
+
+    if ((h=gethostbyname(argv[1])) == NULL) {  // get the host info
+        herror("gethostbyname");
+        exit(1);
+    }
+
+    printf("Host name  : %s\n", h-&gt;h_name);
+    printf("IP Address : %s\n", inet_ntoa(*((struct in_addr *)h-&gt;h_addr)));
+   
+   return 0;
+} 
+</pre>
+</td>
+</tr>
+</tbody></table>
+</p>
+<p>With <tt>gethostbyname()</tt>, you can't use
+<tt>perror()</tt> to print error message (since
+<i><tt>errno</tt></i> is not used).  Instead, call
+<tt>herror()</tt>.</p>
+<p>It's pretty straightforward.  You simply pass the string that
+contains the machine name ("whitehouse.gov") to
+<tt>gethostbyname()</tt>, and then grab the information out
+of the returned <tt>struct hostent</tt>.</p>
+<p>The only possible weirdness might be in the printing of the IP
+address, above.  <i><tt>h-&gt;h_addr</tt></i> is a
+<tt>char*</tt>, but <tt>inet_ntoa()</tt> wants a
+<tt>struct in_addr</tt> passed to it.  So I cast
+<i><tt>h-&gt;h_addr</tt></i> to a <tt>struct in_addr*</tt>,
+then dereference it to get at the data.</p>
+<hr>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr>
+<td align="left"><a href="http://beej.us/net2/html/structs.html">Prev</a></td><td align="center"><a href="http://beej.us/net2/html/index.html">Contents</a></td><td align="right"><a href="http://beej.us/net2/html/clientserver.html">Next</a></td>
+</tr>
+</tbody></table>
+</body></html>

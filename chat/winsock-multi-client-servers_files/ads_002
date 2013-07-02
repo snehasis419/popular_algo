@@ -1,0 +1,29 @@
+{
+
+var google_ads = new Array();
+var google_ad;
+var google_radlinks = new Array();
+var google_radlink;
+var google_info = new Object();
+google_ad = new Object(); 
+google_ad.n = 1; 
+google_ad.type = "flash"; 
+google_ad.bidtype = "CPC"; 
+google_ad.targeting_type = ""; 
+google_ad.url = "http://googleads.g.doubleclick.net/aclk?sa=L&amp;ai=BJIegTbNIUPyeJcjHigfB_IH4DY3O-PwCnZiSxTPl3-KNOsCD2wQQARgBII-q9QE4AFCQxOblBmDlgoCA2A6yAQ93d3cuZGFuaXdlYi5jb226AQk3Mjh4OTBfanPIAQTaAVlodHRwOi8vd3d3LmRhbml3ZWIuY29tL3NvZnR3YXJlLWRldmVsb3BtZW50L2NwcC90aHJlYWRzLzY4MTEvd2luc29jay1tdWx0aS1jbGllbnQtc2VydmVyc6kCN5ZrmlBEUz64AhjAAgbIAs3W9SWoAwHoAwXoA9sF9QMAAQDE9QMAAAAQoAYE4Aadz4kj&amp;num=1&amp;sig=AOD64_3MGod3vAlTT3gUUKY8xzc3wSzCKw&amp;client=ca-pub-8426641637123945&amp;adurl=http://microsite.panasonic.co.in/viera/%3Futm_source%3DGoogle%26utm_medium%3Dcpc%26utm_content%3DGDN%26utm_campaign%3DViera"; 
+google_ad.visible_url = "www.microsite.panasonic.co.in/Viera"; 
+google_ad.image_url = "http://pagead2.googlesyndication.com/pagead/imgad?id=CICAgICQ_djFTBDYBRhaMgjPDxksZVxMjw&amp;clickTAG=http://googleads.g.doubleclick.net/aclk%3Fsa%3DL%26ai%3DBJIegTbNIUPyeJcjHigfB_IH4DY3O-PwCnZiSxTPl3-KNOsCD2wQQARgBII-q9QE4AFCQxOblBmDlgoCA2A6yAQ93d3cuZGFuaXdlYi5jb226AQk3Mjh4OTBfanPIAQTaAVlodHRwOi8vd3d3LmRhbml3ZWIuY29tL3NvZnR3YXJlLWRldmVsb3BtZW50L2NwcC90aHJlYWRzLzY4MTEvd2luc29jay1tdWx0aS1jbGllbnQtc2VydmVyc6kCN5ZrmlBEUz64AhjAAgbIAs3W9SWoAwHoAwXoA9sF9QMAAQDE9QMAAAAQoAYE4Aadz4kj%26num%3D1%26sig%3DAOD64_3MGod3vAlTT3gUUKY8xzc3wSzCKw%26client%3Dca-pub-8426641637123945%26adurl%3Dhttp://microsite.panasonic.co.in/viera/%253Futm_source%253DGoogle%2526utm_medium%253Dcpc%2526utm_content%253DGDN%2526utm_campaign%253DViera";
+google_ad.image_width = "728";
+google_ad.image_height = "90";
+google_ad.image_alt_text = "";
+google_ads[0] = google_ad; 
+google_info.feedback_url = "http://www.google.com/url?ct\x3dabg\x26q\x3dhttps://www.google.com/adsense/support/bin/request.py%3Fcontact%3Dabg_afc%26url%3Dhttp://www.daniweb.com/software-development/cpp/threads/6811/winsock-multi-client-servers%26gl%3DIN%26hl%3Den%26client%3Dca-pub-8426641637123945%26ai0%3DBJIegTbNIUPyeJcjHigfB_IH4DY3O-PwCnZiSxTPl3-KNOsCD2wQQARgBII-q9QE4AFCQxOblBmDlgoCA2A6yAQ93d3cuZGFuaXdlYi5jb226AQk3Mjh4OTBfanPIAQTaAVlodHRwOi8vd3d3LmRhbml3ZWIuY29tL3NvZnR3YXJlLWRldmVsb3BtZW50L2NwcC90aHJlYWRzLzY4MTEvd2luc29jay1tdWx0aS1jbGllbnQtc2VydmVyc6kCN5ZrmlBEUz64AhjAAgbIAs3W9SWoAwHoAwXoA9sF9QMAAQDE9QMAAAAQoAYE4Aadz4kj\x26usg\x3dAFQjCNFekGZP12pQHnIOoCpNk3mgqJDUQA";
+var google_attribution_text = "AdChoices";
+var google_is_rtl = false;
+if (window.google_ad_request_done) {
+google_ad_request_done(google_ads);
+}
+if (window.google_radlink_request_done) {
+google_radlink_request_done(google_radlinks);
+}
+}

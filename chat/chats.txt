@@ -1,0 +1,5 @@
+one to one chat
+duplex chat
+multi client chat
+multicast chat
+broadcast chat
